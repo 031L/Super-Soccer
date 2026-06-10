@@ -30,7 +30,7 @@ knife4j:
       language: zh_cn
 # searchApi
 search-api:
-  api-key: YmtYRkoZ8ikTJ9HRRDqQTzMS
+  api-key:
 
 
 app:
