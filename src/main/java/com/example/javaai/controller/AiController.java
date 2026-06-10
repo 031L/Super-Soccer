@@ -1,12 +1,9 @@
 package com.example.javaai.controller;
 
 import cn.hutool.core.util.StrUtil;
-import com.example.javaai.agent.YuManus;
 import com.example.javaai.agent.football.FootballAgentContext;
 import com.example.javaai.app.FootballApp;
 import jakarta.annotation.Resource;
-import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.tool.ToolCallback;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,15 +16,6 @@ public class AiController {
 
     @Resource
     private FootballApp footballApp;
-
-    @Resource
-    private ToolCallback[] allTools;
-
-    @Resource
-    private ChatModel dashscopeChatModel;
-
-
-
 
     /**
      * 足球多智能体协作（数据 → 推演 → 战术 → 综合），SSE 流式输出。
@@ -70,15 +58,4 @@ public class AiController {
         return footballApp.analyzeStream(message);
     }
 
-    /**
-     * 流式调用 Manus 超级智能体
-     *
-     * @param message
-     * @return
-     */
-    @GetMapping("/manus/chat")
-    public SseEmitter doChatWithManus(String message) {
-        YuManus yuManus = new YuManus(allTools, dashscopeChatModel);
-        return yuManus.runStream(message);
-    }
 }
