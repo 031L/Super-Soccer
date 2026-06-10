@@ -1,0 +1,98 @@
+spring:
+  application:
+    name: Java-Ai
+  profiles:
+    active: local
+#  datasource:
+#    url: xxx
+#    username: root
+#    password: 123456
+server:
+    port: 8123
+    servlet:
+      context-path: /api
+# springdoc-openapi ??????
+springdoc:
+    swagger-ui:
+      path: /swagger-ui.html
+      tags-sorter: alpha
+      operations-sorter: alpha
+    api-docs:
+      path: /v3/api-docs
+    group-configs:
+      - group: 'default'
+        paths-to-match: '/**'
+        packages-to-scan: com.example.javaai.controller
+# knife4j???????????????
+knife4j:
+    enable: true
+    setting:
+      language: zh_cn
+# searchApi
+search-api:
+  api-key: YmtYRkoZ8ikTJ9HRRDqQTzMS
+
+
+app:
+  football:
+    redis:
+      # 完整 Key = keys.{type} + matchId + keySuffix
+      # 例如 jczqDetail::1366392:false、jczqOuzhi::1366392:false、jczqYazhi::1366392:false
+      key-suffix: ":false"
+      legacy-key-fallback: true
+      keys:
+        detail: "jczqDetail::"
+        ouzhi: "jczqOuzhi::"
+        yazhi: "jczqYazhi::"
+      # jczqOuzhi 百家欧盘：仅保留官方竞彩 + 5 家主流公司（500.com companyId）
+      ouzhi-filter:
+        enabled: true
+        company-ids:
+          - "1"      # 竞彩官方
+          - "293"    # 威廉希尔
+          - "3"      # bet365
+          - "2"      # 立博
+          - "4"      # Interwetten
+          - "5"      # 澳门
+      # jczqYazhi 百家亚盘：与欧盘相同的主流公司 companyId（数据中不存在的 ID 会自动跳过）
+      yazhi-filter:
+        enabled: true
+        company-ids:
+          - "1"
+          - "293"
+          - "3"
+          - "2"
+          - "4"
+          - "5"
+  ai:
+    # 多个 classpath 模式，逗号分隔；匹配 document 下所有 .md / .st 模板（足球 Agent 提示词等）
+    prompt:
+      document-patterns: classpath:/document/**/*.md,classpath:/document/**/*.st
+    football:
+      # 各 Agent 模型配置（由 FootballAgentsModelProperties 读取）
+      agents:
+        # 数据 Agent 专用模型（含 Redis 数据整理、联网搜索数据 Agent）
+        data:
+          model: qwen-plus-0112
+          enable-thinking: true
+        # 推演 Agent 专用模型
+        simulation:
+          model: qwen-max
+          enable-thinking: true
+        # 战术 Agent 专用模型
+        tactical:
+          model: qwen3-max
+          enable-thinking: true
+        # 综合 Agent 专用模型
+        synthesis:
+          model: qwen-plus-1220
+          enable-thinking: true
+        # 通用问答 Agent 专用模型（非比赛分析路径）
+        general:
+          model: qwen-max
+          enable-thinking: true
+    model:
+      primary: qwen-max
+      enable-thinking: true
+
+
