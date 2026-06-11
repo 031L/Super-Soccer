@@ -3,10 +3,27 @@ spring:
     name: Java-Ai
   profiles:
     active: local
-#  datasource:
-#    url: xxx
-#    username: root
-#    password: 123456
+  ai:
+    model:
+      embedding: dashscope
+    dashscope:
+      embedding:
+        options:
+          model: text-embedding-v3
+          dimensions: 1024
+          text-type: document
+    vectorstore:
+      pgvector:
+        initialize-schema: true
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+        dimensions: 1024
+        max-document-batch-size: 1000
+  datasource:
+    url: jdbc:postgresql://localhost:5432/Super-Soccer
+    username: postgres
+    password:
+    driver-class-name: org.postgresql.Driver
 server:
     port: 8123
     servlet:
@@ -68,6 +85,13 @@ app:
     # 多个 classpath 模式，逗号分隔；匹配 document 下所有 .md / .st 模板（足球 Agent 提示词等）
     prompt:
       document-patterns: classpath:/document/**/*.md,classpath:/document/**/*.st
+    vectorstore:
+      # 知识库 Markdown 路径（与 Agent 提示词目录分离，避免提示词被误入库）
+      knowledge-patterns: classpath:/document/knowledge/**/*.md
+      chunk-size: 512
+      ingest-on-startup: false
+      search-top-k: 5
+      search-similarity-threshold: 0.0
     football:
       # 各 Agent 模型配置（由 FootballAgentsModelProperties 读取）
       agents:
