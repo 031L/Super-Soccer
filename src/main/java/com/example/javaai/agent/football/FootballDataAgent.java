@@ -1,6 +1,5 @@
 package com.example.javaai.agent.football;
 
-import com.example.javaai.advisor.MyLoggerAdvisor;
 import com.example.javaai.agent.ToolCallAgent;
 import com.example.javaai.prompt.DocumentPromptService;
 import org.springframework.ai.chat.client.ChatClient;
@@ -48,7 +47,6 @@ public class FootballDataAgent extends ToolCallAgent {
         setNextStepPrompt(NEXT_STEP_PROMPT);
         setMaxSteps(8);
         ChatClient chatClient = ChatClient.builder(dashscopeChatModel)
-                .defaultAdvisors(new MyLoggerAdvisor())
                 .build();
         setChatClient(chatClient);
     }
