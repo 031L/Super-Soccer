@@ -9,6 +9,7 @@ import com.example.javaai.agent.football.graph.FootballAgentTaskBuilder;
 import com.example.javaai.agent.football.graph.FootballGraphKeys;
 import com.example.javaai.agent.football.graph.FootballGraphProgress;
 import com.example.javaai.agent.football.graph.FootballGraphStateHelper;
+import com.example.javaai.agent.football.graph.FootballSseOutputPolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -24,13 +25,15 @@ public class DataAgentNode implements NodeAction {
 
     @Override
     public Map<String, Object> apply(OverAllState state) throws Exception {
-        FootballGraphProgress.emit("\n\n---------- 阶段 1/4：数据 Agent ----------\n");
-        FootballDataAgent dataAgent = FootballGraphStateHelper.hasRedisMatchData(state)
-                ? agentFactory.createDataAgentForRedisMatch()
-                : agentFactory.createDataAgent();
-        String output = nodeExecutor.runStage(
-                null, dataAgent, taskBuilder.buildDataTask(state), "数据 Agent");
-        FootballGraphProgress.emit(output);
-        return Map.of(FootballGraphKeys.DATA_ANALYSIS, output);
+        return FootballGraphProgress.runWithSession(state, () -> {
+            FootballGraphProgress.emit("\n\n---------- 阶段 1/4：数据 Agent ----------\n");
+            FootballDataAgent dataAgent = FootballGraphStateHelper.hasRedisMatchData(state)
+                    ? agentFactory.createDataAgentForRedisMatch()
+                    : agentFactory.createDataAgent();
+            String output = nodeExecutor.runStage(
+                    null, dataAgent, taskBuilder.buildDataTask(state), "数据 Agent");
+            FootballGraphProgress.emit(FootballSseOutputPolicy.forSse("data", output));
+            return Map.of(FootballGraphKeys.DATA_ANALYSIS, output);
+        });
     }
 }

@@ -5,8 +5,9 @@ import com.alibaba.cloud.ai.graph.action.NodeAction;
 import com.example.javaai.agent.football.FootballAgentFactory;
 import com.example.javaai.agent.football.graph.FootballAgentNodeExecutor;
 import com.example.javaai.agent.football.graph.FootballAgentTaskBuilder;
-import com.example.javaai.agent.football.graph.FootballGraphKeys;
 import com.example.javaai.agent.football.graph.FootballGraphProgress;
+import com.example.javaai.agent.football.graph.FootballGraphKeys;
+import com.example.javaai.agent.football.graph.FootballSseOutputPolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -22,11 +23,13 @@ public class TacticalAgentNode implements NodeAction {
 
     @Override
     public Map<String, Object> apply(OverAllState state) throws Exception {
-        FootballGraphProgress.emit("\n\n---------- 阶段 2/4：战术 Agent ----------\n");
-        var tacticalAgent = agentFactory.createTacticalAgent();
-        String output = nodeExecutor.runStage(
-                null, tacticalAgent, taskBuilder.buildTacticalTask(state), "战术 Agent");
-        FootballGraphProgress.emit(output);
-        return Map.of(FootballGraphKeys.TACTICAL_ANALYSIS, output);
+        return FootballGraphProgress.runWithSession(state, () -> {
+            FootballGraphProgress.emit("\n\n---------- 阶段 2/4：战术 Agent ----------\n");
+            var tacticalAgent = agentFactory.createTacticalAgent();
+            String output = nodeExecutor.runStage(
+                    null, tacticalAgent, taskBuilder.buildTacticalTask(state), "战术 Agent");
+            FootballGraphProgress.emit(FootballSseOutputPolicy.forSse("tactical", output));
+            return Map.of(FootballGraphKeys.TACTICAL_ANALYSIS, output);
+        });
     }
 }

@@ -21,6 +21,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
@@ -39,6 +43,7 @@ import java.util.function.Consumer;
 public class FootballMultiAgentOrchestrator {
 
     private static final long SSE_TIMEOUT_MS = 300_000L;
+    private static final long SSE_HEARTBEAT_INTERVAL_SEC = 15L;
 
     private final CompiledGraph footballCompiledGraph;
     private final FootballMatchRedisService matchRedisService;
@@ -76,6 +81,12 @@ public class FootballMultiAgentOrchestrator {
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MS);
         CompletableFuture.runAsync(() -> {
             AtomicBoolean clientDisconnected = new AtomicBoolean(false);
+            ScheduledExecutorService heartbeatScheduler = Executors.newSingleThreadScheduledExecutor();
+            ScheduledFuture<?> heartbeat = heartbeatScheduler.scheduleAtFixedRate(
+                    () -> safeSendKeepalive(emitter, clientDisconnected),
+                    SSE_HEARTBEAT_INTERVAL_SEC,
+                    SSE_HEARTBEAT_INTERVAL_SEC,
+                    TimeUnit.SECONDS);
             try {
                 if (structuredOnly) {
                     executeGraphStream(buildContext(userQuery, matchId), event -> safeSendEvent(emitter, clientDisconnected, event));
@@ -96,15 +107,19 @@ public class FootballMultiAgentOrchestrator {
                     safeSendText(emitter, clientDisconnected, "执行错误：" + e.getMessage());
                 }
                 completeEmitterWithError(emitter, clientDisconnected, e);
+            } finally {
+                heartbeat.cancel(false);
+                heartbeatScheduler.shutdownNow();
             }
         });
         return emitter;
     }
 
     private void executeGraphStream(FootballAgentContext context, Consumer<GraphStreamEvent> eventSink) {
-        FootballGraphProgress.bind(null, eventSink);
+        String sessionId = UUID.randomUUID().toString();
+        FootballGraphProgress.bindSession(sessionId, null, eventSink);
         try {
-            Map<String, Object> input = FootballGraphStateHelper.toInitialState(context);
+            Map<String, Object> input = FootballGraphStateHelper.toInitialState(context, sessionId);
             RunnableConfig config = RunnableConfig.builder()
                     .threadId(UUID.randomUUID().toString())
                     .build();
@@ -113,7 +128,7 @@ public class FootballMultiAgentOrchestrator {
                     .doOnNext(nodeOutput -> handleNodeOutput(nodeOutput, eventSink))
                     .blockLast();
         } finally {
-            FootballGraphProgress.clear();
+            FootballGraphProgress.clearSession(sessionId);
         }
     }
 
@@ -127,9 +142,10 @@ public class FootballMultiAgentOrchestrator {
     }
 
     private FootballAgentContext executeGraph(FootballAgentContext context, Consumer<String> progressSink) {
-        FootballGraphProgress.bind(progressSink);
+        String sessionId = UUID.randomUUID().toString();
+        FootballGraphProgress.bindSession(sessionId, progressSink, null);
         try {
-            Map<String, Object> input = FootballGraphStateHelper.toInitialState(context);
+            Map<String, Object> input = FootballGraphStateHelper.toInitialState(context, sessionId);
             RunnableConfig config = RunnableConfig.builder()
                     .threadId(UUID.randomUUID().toString())
                     .build();
@@ -137,7 +153,7 @@ public class FootballMultiAgentOrchestrator {
             return FootballGraphStateHelper.toContext(
                     result.orElseThrow(() -> new AgentExecutionException("StateGraph 执行未返回结果")));
         } finally {
-            FootballGraphProgress.clear();
+            FootballGraphProgress.clearSession(sessionId);
         }
     }
 
@@ -153,6 +169,18 @@ public class FootballMultiAgentOrchestrator {
             throw new AgentExecutionException("message 与 matchId 不能同时为空");
         }
         return new FootballAgentContext(userQuery);
+    }
+
+    private void safeSendKeepalive(SseEmitter emitter, AtomicBoolean clientDisconnected) {
+        if (clientDisconnected.get()) {
+            return;
+        }
+        try {
+            emitter.send(SseEmitter.event().comment("keepalive"));
+        } catch (IOException | IllegalStateException e) {
+            clientDisconnected.set(true);
+            log.debug("SSE keepalive 失败，连接可能已关闭: {}", e.getMessage());
+        }
     }
 
     private void safeSendText(SseEmitter emitter, AtomicBoolean clientDisconnected, String event) {

@@ -24,29 +24,31 @@ public class PrepareContextNode implements NodeAction {
 
     @Override
     public Map<String, Object> apply(OverAllState state) throws Exception {
-        String userQuery = FootballGraphStateHelper.stringValue(state, FootballGraphKeys.USER_QUERY);
-        String matchId = FootballGraphStateHelper.stringValue(state, FootballGraphKeys.MATCH_ID);
-        String redisRawData = FootballGraphStateHelper.stringValue(state, FootballGraphKeys.REDIS_RAW_DATA);
+        return FootballGraphProgress.runWithSession(state, () -> {
+            String userQuery = FootballGraphStateHelper.stringValue(state, FootballGraphKeys.USER_QUERY);
+            String matchId = FootballGraphStateHelper.stringValue(state, FootballGraphKeys.MATCH_ID);
+            String redisRawData = FootballGraphStateHelper.stringValue(state, FootballGraphKeys.REDIS_RAW_DATA);
 
-        FootballGraphProgress.emit("【编排器】启动足球 StateGraph 协作，用户问题：" + userQuery);
+            FootballGraphProgress.emit("【编排器】启动足球 StateGraph 协作，用户问题：" + userQuery);
 
-        if (StrUtil.isBlank(redisRawData) && StrUtil.isNotBlank(matchId)) {
-            redisRawData = matchRedisService.findMatchDataById(matchId).orElse("");
-            if (StrUtil.isNotBlank(redisRawData)) {
-                FootballGraphProgress.emit("【编排器】已从 Redis 加载比赛 ID：" + matchId);
-            } else {
-                FootballGraphProgress.emit("【编排器】Redis 无比赛 ID " + matchId + " 的数据，将使用搜索工具获取");
+            if (StrUtil.isBlank(redisRawData) && StrUtil.isNotBlank(matchId)) {
+                redisRawData = matchRedisService.findMatchDataById(matchId).orElse("");
+                if (StrUtil.isNotBlank(redisRawData)) {
+                    FootballGraphProgress.emit("【编排器】已从 Redis 加载比赛 ID：" + matchId);
+                } else {
+                    FootballGraphProgress.emit("【编排器】Redis 无比赛 ID " + matchId + " 的数据，将使用搜索工具获取");
+                }
             }
-        }
 
-        if (StrUtil.isBlank(userQuery) && StrUtil.isNotBlank(matchId)) {
-            userQuery = "请整理并分析比赛 ID " + matchId + " 的相关数据";
-        }
+            if (StrUtil.isBlank(userQuery) && StrUtil.isNotBlank(matchId)) {
+                userQuery = "请整理并分析比赛 ID " + matchId + " 的相关数据";
+            }
 
-        Map<String, Object> updates = new HashMap<>();
-        updates.put(FootballGraphKeys.USER_QUERY, userQuery);
-        updates.put(FootballGraphKeys.MATCH_ID, matchId);
-        updates.put(FootballGraphKeys.REDIS_RAW_DATA, redisRawData);
-        return updates;
+            Map<String, Object> updates = new HashMap<>();
+            updates.put(FootballGraphKeys.USER_QUERY, userQuery);
+            updates.put(FootballGraphKeys.MATCH_ID, matchId);
+            updates.put(FootballGraphKeys.REDIS_RAW_DATA, redisRawData);
+            return updates;
+        });
     }
 }

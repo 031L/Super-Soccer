@@ -7,6 +7,7 @@ import com.example.javaai.agent.football.graph.FootballAgentNodeExecutor;
 import com.example.javaai.agent.football.graph.FootballAgentTaskBuilder;
 import com.example.javaai.agent.football.graph.FootballGraphKeys;
 import com.example.javaai.agent.football.graph.FootballGraphProgress;
+import com.example.javaai.agent.football.graph.FootballSseOutputPolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -22,11 +23,13 @@ public class SimulationAgentNode implements NodeAction {
 
     @Override
     public Map<String, Object> apply(OverAllState state) throws Exception {
-        FootballGraphProgress.emit("\n\n---------- 阶段 3/4：推演 Agent ----------\n");
-        var simulationAgent = agentFactory.createSimulationAgent();
-        String output = nodeExecutor.runStage(
-                null, simulationAgent, taskBuilder.buildSimulationTask(state), "推演 Agent");
-        FootballGraphProgress.emit(output);
-        return Map.of(FootballGraphKeys.SIMULATION_ANALYSIS, output);
+        return FootballGraphProgress.runWithSession(state, () -> {
+            FootballGraphProgress.emit("\n\n---------- 阶段 3/4：推演 Agent ----------\n");
+            var simulationAgent = agentFactory.createSimulationAgent();
+            String output = nodeExecutor.runStage(
+                    null, simulationAgent, taskBuilder.buildSimulationTask(state), "推演 Agent");
+            FootballGraphProgress.emit(FootballSseOutputPolicy.forSse("simulation", output));
+            return Map.of(FootballGraphKeys.SIMULATION_ANALYSIS, output);
+        });
     }
 }

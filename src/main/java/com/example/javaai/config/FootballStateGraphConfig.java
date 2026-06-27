@@ -56,6 +56,7 @@ public class FootballStateGraphConfig {
             strategies.put(FootballGraphKeys.SIMULATION_ANALYSIS, new ReplaceStrategy());
             strategies.put(FootballGraphKeys.TACTICAL_ANALYSIS, new ReplaceStrategy());
             strategies.put(FootballGraphKeys.FINAL_REPORT, new ReplaceStrategy());
+            strategies.put(FootballGraphKeys.STREAM_SESSION_ID, new ReplaceStrategy());
             return strategies;
         };
 

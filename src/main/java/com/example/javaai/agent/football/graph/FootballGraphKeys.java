@@ -13,6 +13,8 @@ public final class FootballGraphKeys {
     public static final String SIMULATION_ANALYSIS = "simulationAnalysis";
     public static final String TACTICAL_ANALYSIS = "tacticalAnalysis";
     public static final String FINAL_REPORT = "finalReport";
+    /** SSE 流式会话 ID，用于跨异步图节点传播 progress sink */
+    public static final String STREAM_SESSION_ID = "streamSessionId";
 
     private FootballGraphKeys() {
     }
