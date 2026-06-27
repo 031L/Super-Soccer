@@ -42,9 +42,6 @@ import java.util.function.Consumer;
 @RequiredArgsConstructor
 public class FootballMultiAgentOrchestrator {
 
-    private static final long SSE_TIMEOUT_MS = 300_000L;
-    private static final long SSE_HEARTBEAT_INTERVAL_SEC = 15L;
-
     private final CompiledGraph footballCompiledGraph;
     private final FootballMatchRedisService matchRedisService;
     private final ObjectMapper objectMapper;
@@ -78,14 +75,17 @@ public class FootballMultiAgentOrchestrator {
     }
 
     private SseEmitter runStructuredStream(String userQuery, String matchId, boolean structuredOnly) {
-        SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MS);
+        SseEmitter emitter = new SseEmitter(FootballSseConstants.TIMEOUT_MS);
+        emitter.onTimeout(() -> log.warn("SSE 异步请求超时（{} ms），前端可能只收到部分 Agent 输出",
+                FootballSseConstants.TIMEOUT_MS));
+        emitter.onError(ex -> log.warn("SSE 连接异常: {}", ex.getMessage()));
         CompletableFuture.runAsync(() -> {
             AtomicBoolean clientDisconnected = new AtomicBoolean(false);
             ScheduledExecutorService heartbeatScheduler = Executors.newSingleThreadScheduledExecutor();
             ScheduledFuture<?> heartbeat = heartbeatScheduler.scheduleAtFixedRate(
                     () -> safeSendKeepalive(emitter, clientDisconnected),
-                    SSE_HEARTBEAT_INTERVAL_SEC,
-                    SSE_HEARTBEAT_INTERVAL_SEC,
+                    FootballSseConstants.HEARTBEAT_INTERVAL_SEC,
+                    FootballSseConstants.HEARTBEAT_INTERVAL_SEC,
                     TimeUnit.SECONDS);
             try {
                 if (structuredOnly) {
@@ -188,7 +188,18 @@ public class FootballMultiAgentOrchestrator {
             return;
         }
         try {
-            emitter.send(event);
+            int chunkSize = FootballSseConstants.CHUNK_SIZE;
+            if (event.length() <= chunkSize) {
+                emitter.send(event);
+                return;
+            }
+            for (int offset = 0; offset < event.length(); offset += chunkSize) {
+                if (clientDisconnected.get()) {
+                    return;
+                }
+                int end = Math.min(offset + chunkSize, event.length());
+                emitter.send(event.substring(offset, end));
+            }
         } catch (IOException | IllegalStateException e) {
             clientDisconnected.set(true);
             log.warn("SSE 连接已关闭，停止向前端推送: {}", e.getMessage());

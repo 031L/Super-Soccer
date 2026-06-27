@@ -17,8 +17,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @RequiredArgsConstructor
 public class GeneralQaOrchestrator {
 
-    private static final long SSE_TIMEOUT_MS = 300_000L;
-
     private final GeneralQaRunner generalQaRunner;
 
     public String run(String userQuery) {
@@ -28,7 +26,8 @@ public class GeneralQaOrchestrator {
 
     public SseEmitter runStream(String userQuery) {
         log.info("通用问答流式开始: {}", userQuery);
-        SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MS);
+        SseEmitter emitter = new SseEmitter(FootballSseConstants.TIMEOUT_MS);
+        emitter.onTimeout(() -> log.warn("通用问答 SSE 超时（{} ms）", FootballSseConstants.TIMEOUT_MS));
         CompletableFuture.runAsync(() -> runStreamInternal(userQuery, emitter));
         return emitter;
     }

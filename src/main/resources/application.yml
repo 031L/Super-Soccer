@@ -24,10 +24,17 @@ spring:
     username: postgres
     password:
     driver-class-name: org.postgresql.Driver
+  mvc:
+    async:
+      # 与 SseEmitter 超时一致；4 Agent + thinking 流水线常超过 5 分钟
+      request-timeout: 1200000
 server:
     port: 8123
     servlet:
       context-path: /api
+    tomcat:
+      connection-timeout: 1200000
+      keep-alive-timeout: 120000
 # springdoc-openapi ??????
 springdoc:
     swagger-ui:
