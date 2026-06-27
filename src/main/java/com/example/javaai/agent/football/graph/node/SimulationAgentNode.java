@@ -22,7 +22,7 @@ public class SimulationAgentNode implements NodeAction {
 
     @Override
     public Map<String, Object> apply(OverAllState state) throws Exception {
-        FootballGraphProgress.emit("\n\n---------- 阶段 2/4：推演 Agent ----------\n");
+        FootballGraphProgress.emit("\n\n---------- 阶段 3/4：推演 Agent ----------\n");
         var simulationAgent = agentFactory.createSimulationAgent();
         String output = nodeExecutor.runStage(
                 null, simulationAgent, taskBuilder.buildSimulationTask(state), "推演 Agent");

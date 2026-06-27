@@ -59,8 +59,12 @@ app:
       legacy-key-fallback: true
       keys:
         detail: "jczqDetail::"
+        shuju: "jczqShuju::"
         ouzhi: "jczqOuzhi::"
+        ouzhi-changes: "jczqOuzhi::changes:"
         yazhi: "jczqYazhi::"
+        yazhi-changes: "jczqYazhi::changes:"
+        touzhu: "jczqTouzhu::"
       # jczqOuzhi 百家欧盘：仅保留官方竞彩 + 5 家主流公司（500.com companyId）
       ouzhi-filter:
         enabled: true
@@ -82,35 +86,42 @@ app:
           - "4"
           - "5"
   ai:
-    # 多个 classpath 模式，逗号分隔；匹配 document 下所有 .md / .st 模板（足球 Agent 提示词等）
+    # Agent 提示词模板（与 knowledge 知识库目录分离）
     prompt:
-      document-patterns: classpath:/document/**/*.md,classpath:/document/**/*.st
+      document-patterns: classpath:/document/football/**/*.md,classpath:/document/football/**/*.st
     vectorstore:
       # 知识库 Markdown 路径（与 Agent 提示词目录分离，避免提示词被误入库）
       knowledge-patterns: classpath:/document/knowledge/**/*.md
       chunk-size: 512
       ingest-on-startup: false
+      # 入库前先删除 source=knowledge 旧数据，避免重复 /ingest 叠加
+      ingest-replace-existing: true
       search-top-k: 5
-      search-similarity-threshold: 0.0
+      search-similarity-threshold: 0.6
+      # 通用 Agent 知识检索：仅 PGVector 语义搜索，无命中时不注入知识库
+      general-agent-rag-enabled: true
+      general-agent-direct-read-fallback: false
     football:
       # 各 Agent 模型配置（由 FootballAgentsModelProperties 读取）
       agents:
         # 数据 Agent 专用模型（含 Redis 数据整理、联网搜索数据 Agent）
         data:
-          model: qwen-plus-0112
+          model: qwen3-32b
           enable-thinking: true
         # 推演 Agent 专用模型
         simulation:
-          model: qwen-max
+          model: qwen3.7-plus
           enable-thinking: true
+          multi-model: true
         # 战术 Agent 专用模型
         tactical:
           model: qwen3-max
           enable-thinking: true
         # 综合 Agent 专用模型
         synthesis:
-          model: qwen-plus-1220
+          model: qwen3.7-plus
           enable-thinking: true
+          multi-model: true
         # 通用问答 Agent 专用模型（非比赛分析路径）
         general:
           model: qwen-max

@@ -20,8 +20,10 @@ public class FootballDataAgent extends ToolCallAgent {
             """;
 
     private static final String REDIS_NEXT_STEP_PROMPT = """
-            已提供 Redis 清洗后的比赛 JSON。请**先**根据 Redis 写出完整报告主体（含 `_meta.hasEuropeanOdds`/`hasAsianHandicap` 为 true 时的赔率章节）。
+            已提供 Redis 清洗后的比赛 JSON。请**先**根据 Redis 写出完整报告主体（含 `_meta.hasEuropeanOdds`/`hasAsianHandicap`/`hasBettingVolume`/`hasEuropeanOddsChanges`/`hasAsianHandicapChanges` 为 true 时的对应章节）。
             `hasJczqOfficialOdds=true` 表示竞彩官方已在 `europeanOdds.companies`（companyId=1），**不要**再搜竞彩官方赔率。
+            `hasBettingVolume=true` 表示必发交易量已在 `bettingVolume`，**不要**再搜必发交易量。
+            赔率变化过程见 `europeanOdds.changesByCompany` / `asianHandicap.changesByCompany`，**不要**重复搜索已有变化数据。
             仅当 `_meta.missingSections` 列出某项时，才对该项搜索补充；不要搜索 Redis 已有字段（含非空的积分榜、交锋、欧赔、亚盘）。
             空数组（如 homeRecentRecords）视为缺失，可搜索补充。
             **工具返回后，必须输出 Redis+搜索合并的完整结构化报告，再 terminate；禁止只列搜索计划就结束。**
@@ -32,7 +34,7 @@ public class FootballDataAgent extends ToolCallAgent {
             # Redis 数据模式（当前任务）
             - 用户消息中包含从 Redis 读取并已系统清洗的比赛 JSON（无 @class、无 BigDecimal 包装，中文已还原）。
             - 请优先解析并整理该数据；**禁止**要求用户提供数据或声称无法访问 Redis。
-            - 仅 `_meta.missingSections` 所列或 Redis 中为空数组/空字段的项，才使用搜索补充；竞彩官方以 `hasJczqOfficialOdds` 为准（欧盘 companyId=1）。
+            - 仅 `_meta.missingSections` 所列或 Redis 中为空数组/空字段的项，才使用搜索补充；竞彩官方以 `hasJczqOfficialOdds` 为准；必发交易量以 `hasBettingVolume` 为准；赔率变化以 `hasEuropeanOddsChanges`/`hasAsianHandicapChanges` 为准。
             - 工具返回后，**必须**将搜索结果写入结构化报告，不要停在「我将使用搜索工具补充」。
             - 不要编造 Redis 与搜索结果均不存在的字段；补充数据需标注来源。
             """;

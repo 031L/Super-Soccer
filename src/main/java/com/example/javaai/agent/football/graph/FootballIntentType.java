@@ -5,7 +5,7 @@ package com.example.javaai.agent.football.graph;
  */
 public enum FootballIntentType {
 
-    /** 比赛结果预测 / 赛前分析 → 数据 → 推演 → 战术 → 综合 */
+    /** 比赛结果预测 / 赛前分析 → 数据 → 战术 → 推演 → 综合 */
     MATCH_ANALYSIS,
 
     /** 其他足球相关问题 → 通用 Agent */

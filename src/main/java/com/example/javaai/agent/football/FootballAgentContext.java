@@ -16,6 +16,8 @@ public class FootballAgentContext {
     private String simulationAnalysis;
     private String tacticalAnalysis;
     private String finalReport;
+    /** StateGraph 意图分类结果：MATCH_ANALYSIS / GENERAL_QA */
+    private String intent;
 
     public FootballAgentContext(String userQuery) {
         this(userQuery, null, null);
@@ -31,7 +33,7 @@ public class FootballAgentContext {
         return redisRawData != null && !redisRawData.isBlank();
     }
 
-    public String buildSimulationInput() {
+    public String buildTacticalInput() {
         return """
                 【用户原始问题】
                 %s
@@ -41,7 +43,7 @@ public class FootballAgentContext {
                 """.formatted(userQuery, nullToEmpty(dataAnalysis));
     }
 
-    public String buildTacticalInput() {
+    public String buildSimulationInput() {
         return """
                 【用户原始问题】
                 %s
@@ -49,9 +51,9 @@ public class FootballAgentContext {
                 【数据 Agent 产出】
                 %s
 
-                【推演 Agent 产出】
+                【战术 Agent 产出】
                 %s
-                """.formatted(userQuery, nullToEmpty(dataAnalysis), nullToEmpty(simulationAnalysis));
+                """.formatted(userQuery, nullToEmpty(dataAnalysis), nullToEmpty(tacticalAnalysis));
     }
 
     public String buildSynthesisInput() {
@@ -62,16 +64,16 @@ public class FootballAgentContext {
                 【数据 Agent 产出】
                 %s
 
-                【推演 Agent 产出】
+                【战术 Agent 产出】
                 %s
 
-                【战术 Agent 产出】
+                【推演 Agent 产出】
                 %s
                 """.formatted(
                 userQuery,
                 nullToEmpty(dataAnalysis),
-                nullToEmpty(simulationAnalysis),
-                nullToEmpty(tacticalAnalysis));
+                nullToEmpty(tacticalAnalysis),
+                nullToEmpty(simulationAnalysis));
     }
 
     private static String nullToEmpty(String value) {

@@ -69,12 +69,14 @@ public class FootballAgentsChatModelConfig {
     private ChatModel buildAgentChatModel(
             DashScopeChatModel dashScopeChatModel,
             AgentModelSettings settings) {
-        DashScopeChatOptions options = DashScopeChatOptions.builder()
+        var optionsBuilder = DashScopeChatOptions.builder()
                 .withModel(settings.getModel())
-                .withEnableThinking(settings.getEnableThinking())
-                .build();
+                .withEnableThinking(settings.getEnableThinking());
+        if (Boolean.TRUE.equals(settings.getMultiModel())) {
+            optionsBuilder.withMultiModel(true);
+        }
         return dashScopeChatModel.mutate()
-                .defaultOptions(options)
+                .defaultOptions(optionsBuilder.build())
                 .build();
     }
 }

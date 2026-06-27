@@ -19,13 +19,13 @@ public record GraphWorkflowInfo(
                         "prepare_context",
                         "classify_intent",
                         "data_agent",
-                        "simulation_agent",
                         "tactical_agent",
+                        "simulation_agent",
                         "synthesis_agent",
                         "general_qa_agent"),
                 Map.of(
-                        "MATCH_ANALYSIS", List.of("data_agent", "simulation_agent", "tactical_agent", "synthesis_agent"),
+                        "MATCH_ANALYSIS", List.of("data_agent", "tactical_agent", "simulation_agent", "synthesis_agent"),
                         "GENERAL_QA", List.of("general_qa_agent")),
-                List.of("prepare_context", "classify_intent", "data_agent", "simulation_agent", "tactical_agent", "synthesis_agent"));
+                List.of("prepare_context", "classify_intent", "data_agent", "tactical_agent", "simulation_agent", "synthesis_agent"));
     }
 }

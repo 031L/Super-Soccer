@@ -18,7 +18,7 @@ public class AiController {
     private FootballApp footballApp;
 
     /**
-     * 足球多智能体协作（数据 → 推演 → 战术 → 综合），SSE 流式输出。
+     * 足球多智能体协作（数据 → 战术 → 推演 → 综合），SSE 流式输出。
      * 传入 matchId 时从 Redis 读取比赛数据交给数据 Agent 整理。
      */
     @GetMapping(value = "/football/multi_agent/stream")

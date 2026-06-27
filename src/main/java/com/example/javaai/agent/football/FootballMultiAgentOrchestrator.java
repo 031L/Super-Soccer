@@ -1,11 +1,16 @@
 package com.example.javaai.agent.football;
 
 import com.alibaba.cloud.ai.graph.CompiledGraph;
+import com.alibaba.cloud.ai.graph.NodeOutput;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.example.javaai.agent.AgentExecutionException;
 import com.example.javaai.agent.football.graph.FootballGraphProgress;
 import com.example.javaai.agent.football.graph.FootballGraphStateHelper;
+import com.example.javaai.agent.football.graph.api.FootballGraphResponse;
+import com.example.javaai.agent.football.graph.api.GraphStreamEvent;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -24,7 +29,7 @@ import java.util.function.Consumer;
  *
  * <pre>
  * START → prepare_context → classify_intent
- *   ├─ MATCH_ANALYSIS → 数据 → 推演 → 战术 → 综合 → END
+ *   ├─ MATCH_ANALYSIS → 数据 → 战术 → 推演 → 综合 → END
  *   └─ GENERAL_QA     → 通用 Agent → END
  * </pre>
  */
@@ -33,59 +38,92 @@ import java.util.function.Consumer;
 @RequiredArgsConstructor
 public class FootballMultiAgentOrchestrator {
 
+    private static final long SSE_TIMEOUT_MS = 300_000L;
+
     private final CompiledGraph footballCompiledGraph;
     private final FootballMatchRedisService matchRedisService;
+    private final ObjectMapper objectMapper;
 
     public FootballAgentContext run(String userQuery) {
-        return executeGraph(new FootballAgentContext(userQuery), null);
+        return executeGraph(buildContext(userQuery, null), null);
     }
 
     public FootballAgentContext runByMatchId(String matchId, String userQuery) {
-        String redisData = matchRedisService.findMatchDataById(matchId).orElse(null);
-        String query = userQuery == null || userQuery.isBlank()
-                ? "请整理并分析比赛 ID " + matchId + " 的相关数据"
-                : userQuery;
-        FootballAgentContext context = new FootballAgentContext(query, matchId, redisData);
-        return executeGraph(context, null);
+        return executeGraph(buildContext(userQuery, matchId), null);
+    }
+
+    public FootballGraphResponse invokeStructured(String userQuery, String matchId) {
+        FootballAgentContext context = executeGraph(buildContext(userQuery, matchId), null);
+        return FootballGraphResponse.fromContext(context);
     }
 
     public SseEmitter runStream(String userQuery) {
-        SseEmitter emitter = new SseEmitter(300000L);
-        CompletableFuture.runAsync(() -> runStreamInternal(new FootballAgentContext(userQuery), emitter));
-        return emitter;
+        return runStructuredStream(userQuery, null, false);
     }
 
     public SseEmitter runStreamByMatchId(String matchId, String userQuery) {
-        SseEmitter emitter = new SseEmitter(300000L);
+        return runStructuredStream(userQuery, matchId, false);
+    }
+
+    /**
+     * 使用 CompiledGraph.stream() 推送结构化 SSE 事件，充分暴露 StateGraph 节点与状态。
+     */
+    public SseEmitter runStructuredStream(String userQuery, String matchId) {
+        return runStructuredStream(userQuery, matchId, true);
+    }
+
+    private SseEmitter runStructuredStream(String userQuery, String matchId, boolean structuredOnly) {
+        SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MS);
         CompletableFuture.runAsync(() -> {
+            AtomicBoolean clientDisconnected = new AtomicBoolean(false);
             try {
-                String redisData = matchRedisService.findMatchDataById(matchId).orElse(null);
-                String query = userQuery == null || userQuery.isBlank()
-                        ? "请整理并分析比赛 ID " + matchId + " 的相关数据"
-                        : userQuery;
-                runStreamInternal(new FootballAgentContext(query, matchId, redisData), emitter);
+                if (structuredOnly) {
+                    executeGraphStream(buildContext(userQuery, matchId), event -> safeSendEvent(emitter, clientDisconnected, event));
+                } else {
+                    executeGraph(buildContext(userQuery, matchId), text -> safeSendText(emitter, clientDisconnected, text));
+                    safeSendText(emitter, clientDisconnected, "\n\n========== 分析完成 ==========");
+                }
+                safeComplete(emitter, clientDisconnected);
             } catch (Exception e) {
-                log.error("足球 StateGraph 流式执行失败", e);
-                completeEmitterWithError(emitter, new AtomicBoolean(false), e);
+                if (clientDisconnected.get()) {
+                    log.warn("StateGraph 流式输出时客户端已断开: {}", e.getMessage());
+                    return;
+                }
+                log.error("StateGraph 流式执行失败", e);
+                if (structuredOnly) {
+                    safeSendEvent(emitter, clientDisconnected, GraphStreamEvent.error(e.getMessage()));
+                } else {
+                    safeSendText(emitter, clientDisconnected, "执行错误：" + e.getMessage());
+                }
+                completeEmitterWithError(emitter, clientDisconnected, e);
             }
         });
         return emitter;
     }
 
-    private void runStreamInternal(FootballAgentContext context, SseEmitter emitter) {
-        AtomicBoolean clientDisconnected = new AtomicBoolean(false);
+    private void executeGraphStream(FootballAgentContext context, Consumer<GraphStreamEvent> eventSink) {
+        FootballGraphProgress.bind(null, eventSink);
         try {
-            executeGraph(context, event -> safeSend(emitter, clientDisconnected, event));
-            safeSend(emitter, clientDisconnected, "\n\n========== 分析完成 ==========");
-            safeComplete(emitter, clientDisconnected);
-        } catch (Exception e) {
-            if (clientDisconnected.get()) {
-                log.warn("足球 StateGraph 流式输出时客户端已断开，后台流水线异常: {}", e.getMessage());
-                return;
-            }
-            log.error("足球 StateGraph 流式执行失败", e);
-            completeEmitterWithError(emitter, clientDisconnected, e);
+            Map<String, Object> input = FootballGraphStateHelper.toInitialState(context);
+            RunnableConfig config = RunnableConfig.builder()
+                    .threadId(UUID.randomUUID().toString())
+                    .build();
+            footballCompiledGraph.stream(input, config)
+                    .filter(nodeOutput -> !nodeOutput.isSTART())
+                    .doOnNext(nodeOutput -> handleNodeOutput(nodeOutput, eventSink))
+                    .blockLast();
+        } finally {
+            FootballGraphProgress.clear();
         }
+    }
+
+    private void handleNodeOutput(NodeOutput nodeOutput, Consumer<GraphStreamEvent> eventSink) {
+        Map<String, Object> snapshot = FootballGraphStateHelper.toStateSnapshot(nodeOutput.state());
+        if (nodeOutput.isEND()) {
+            eventSink.accept(GraphStreamEvent.done(snapshot));
+            return;
+        }
+        eventSink.accept(GraphStreamEvent.nodeComplete(nodeOutput.node(), snapshot));
     }
 
     private FootballAgentContext executeGraph(FootballAgentContext context, Consumer<String> progressSink) {
@@ -103,7 +141,21 @@ public class FootballMultiAgentOrchestrator {
         }
     }
 
-    private void safeSend(SseEmitter emitter, AtomicBoolean clientDisconnected, String event) {
+    private FootballAgentContext buildContext(String userQuery, String matchId) {
+        if (matchId != null && !matchId.isBlank()) {
+            String redisData = matchRedisService.findMatchDataById(matchId).orElse(null);
+            String query = userQuery == null || userQuery.isBlank()
+                    ? "请整理并分析比赛 ID " + matchId + " 的相关数据"
+                    : userQuery;
+            return new FootballAgentContext(query, matchId, redisData);
+        }
+        if (userQuery == null || userQuery.isBlank()) {
+            throw new AgentExecutionException("message 与 matchId 不能同时为空");
+        }
+        return new FootballAgentContext(userQuery);
+    }
+
+    private void safeSendText(SseEmitter emitter, AtomicBoolean clientDisconnected, String event) {
         if (clientDisconnected.get() || event == null) {
             return;
         }
@@ -112,6 +164,28 @@ public class FootballMultiAgentOrchestrator {
         } catch (IOException | IllegalStateException e) {
             clientDisconnected.set(true);
             log.warn("SSE 连接已关闭，停止向前端推送: {}", e.getMessage());
+        }
+    }
+
+    private void safeSendEvent(SseEmitter emitter, AtomicBoolean clientDisconnected, GraphStreamEvent event) {
+        if (clientDisconnected.get() || event == null) {
+            return;
+        }
+        try {
+            emitter.send(SseEmitter.event()
+                    .name(event.type().name())
+                    .data(toJson(event)));
+        } catch (IOException | IllegalStateException e) {
+            clientDisconnected.set(true);
+            log.warn("SSE 连接已关闭，停止向前端推送: {}", e.getMessage());
+        }
+    }
+
+    private String toJson(GraphStreamEvent event) {
+        try {
+            return objectMapper.writeValueAsString(event);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("序列化 GraphStreamEvent 失败", e);
         }
     }
 
@@ -128,7 +202,6 @@ public class FootballMultiAgentOrchestrator {
     }
 
     private void completeEmitterWithError(SseEmitter emitter, AtomicBoolean clientDisconnected, Exception e) {
-        safeSend(emitter, clientDisconnected, "执行错误：" + e.getMessage());
         if (!clientDisconnected.get()) {
             try {
                 emitter.completeWithError(e);

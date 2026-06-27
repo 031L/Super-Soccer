@@ -6,7 +6,7 @@
 
 ## 功能特性
 
-- **足球多智能体流水线**：数据 → 推演 → 战术 → 综合，四阶段串行协作
+- **足球多智能体流水线**：数据 → 战术 → 推演 → 综合，四阶段串行协作
 - **意图路由**：自动识别「比赛分析」与「通用足球问答」，走不同执行路径
 - **Redis 比赛数据接入**：按 `matchId` 自动读取详情、欧盘、亚盘并合并
 - **SSE 流式输出**：实时推送各 Agent 阶段进度与结果
@@ -135,9 +135,9 @@ stateDiagram-v2
     classify_intent --> general_qa_agent: GENERAL_QA\n(通用足球问答)
 
     state "比赛分析流水线" as pipeline {
-        data_agent --> simulation_agent: dataAnalysis
-        simulation_agent --> tactical_agent: simulationAnalysis
-        tactical_agent --> synthesis_agent: tacticalAnalysis
+        data_agent --> tactical_agent: dataAnalysis
+        tactical_agent --> simulation_agent: tacticalAnalysis
+        simulation_agent --> synthesis_agent: simulationAnalysis
     }
 
     synthesis_agent --> [*]: finalReport
@@ -449,7 +449,7 @@ sequenceDiagram
     Graph-->>Graph: matchId 存在 → MATCH_ANALYSIS
 
     Note over Graph: Node 3~6 — 四阶段串行
-    loop 数据 → 推演 → 战术 → 综合
+    loop 数据 → 战术 → 推演 → 综合
         Graph->>Factory: createXxxAgent()
         Factory-->>Graph: 新 Agent 实例
         Graph->>LLM: ChatClient.call()

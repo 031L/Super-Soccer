@@ -3,6 +3,7 @@ package com.example.javaai.controller;
 import com.example.javaai.rag.KnowledgeVectorStoreService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.document.Document;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -43,6 +44,16 @@ public class VectorStoreController {
     public Map<String, Object> ingest() {
         int count = knowledgeVectorStoreService.ingestKnowledgeMarkdown();
         return Map.of("chunksAdded", count, "message", count > 0 ? "导入成功" : "未找到知识库文件");
+    }
+
+    /**
+     * 清除向量库中 source=knowledge 的知识库数据。
+     * DELETE /api/ai/vector/knowledge
+     */
+    @DeleteMapping("/knowledge")
+    public Map<String, Object> deleteKnowledge() {
+        knowledgeVectorStoreService.deleteKnowledgeDocuments();
+        return Map.of("message", "知识库向量数据已清除");
     }
 
     /**

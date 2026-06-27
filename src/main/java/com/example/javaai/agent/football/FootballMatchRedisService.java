@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 按比赛 ID 从 Redis 合并读取 Detail + Ouzhi + Yazhi，供足球 Agent 使用。
+ * 按比赛 ID 从 Redis 合并读取 Detail、Shuju、Ouzhi、Yazhi、Touzhu 及赔率变化，供足球 Agent 使用。
  */
 @Service
 @Slf4j
@@ -25,7 +25,7 @@ public class FootballMatchRedisService {
     private final FootballRedisProperties redisProperties;
 
     /**
-     * 合并读取 Detail、Ouzhi、Yazhi；任一块存在即返回，三块皆无则 empty。
+     * 合并读取各 Redis 板块；任一块存在即返回，全部缺失则 empty。
      */
     public Optional<String> findMatchDataById(String matchId) {
         if (StrUtil.isBlank(matchId)) {
@@ -34,41 +34,65 @@ public class FootballMatchRedisService {
         String fixtureId = matchId.trim();
 
         Optional<String> detail = readSection(redisProperties.getKeys().getDetail(), fixtureId);
+        Optional<String> shuju = readSection(redisProperties.getKeys().getShuju(), fixtureId);
         Optional<String> ouzhi = readSection(redisProperties.getKeys().getOuzhi(), fixtureId);
         Optional<String> yazhi = readSection(redisProperties.getKeys().getYazhi(), fixtureId);
+        Optional<String> touzhu = readSection(redisProperties.getKeys().getTouzhu(), fixtureId);
 
-        if (detail.isEmpty() && ouzhi.isEmpty() && yazhi.isEmpty()) {
-            log.warn("Redis 中未找到比赛数据，matchId={}, detailKey={}, ouzhiKey={}, yazhiKey={}",
-                    fixtureId,
-                    buildRedisKey(redisProperties.getKeys().getDetail(), fixtureId),
-                    buildRedisKey(redisProperties.getKeys().getOuzhi(), fixtureId),
-                    buildRedisKey(redisProperties.getKeys().getYazhi(), fixtureId));
+        if (detail.isEmpty() && shuju.isEmpty() && ouzhi.isEmpty() && yazhi.isEmpty() && touzhu.isEmpty()
+                && !hasAnyOddsChanges(fixtureId)) {
+            log.warn("Redis 中未找到比赛数据，matchId={}", fixtureId);
             return Optional.empty();
         }
 
         JSONObject merged = JSONUtil.createObj();
         merged.set("matchId", fixtureId);
 
-        List<String> loadedKeys = new ArrayList<>(3);
+        List<String> loadedKeys = new ArrayList<>();
         detail.ifPresent(data -> {
             JSONObject detailObj = JSONUtil.parseObj(data);
             filterOddsCompaniesInDetail(detailObj);
             merged.set("detail", detailObj);
             loadedKeys.add(buildRedisKey(redisProperties.getKeys().getDetail(), fixtureId));
         });
+        shuju.ifPresent(data -> {
+            merged.set("matchData", JSONUtil.parseObj(data));
+            loadedKeys.add(resolveLoadedKey(redisProperties.getKeys().getShuju(), fixtureId));
+        });
         ouzhi.ifPresent(data -> {
-            merged.set("europeanOdds", JSONUtil.parseObj(data));
+            JSONObject europeanOdds = applyOuzhiCompanyFilter(JSONUtil.parseObj(data));
+            merged.set("europeanOdds", europeanOdds);
             loadedKeys.add(buildRedisKey(redisProperties.getKeys().getOuzhi(), fixtureId));
         });
         yazhi.ifPresent(data -> {
-            merged.set("asianHandicap", JSONUtil.parseObj(data));
+            JSONObject asianHandicap = applyYazhiCompanyFilter(JSONUtil.parseObj(data));
+            merged.set("asianHandicap", asianHandicap);
             loadedKeys.add(buildRedisKey(redisProperties.getKeys().getYazhi(), fixtureId));
         });
+        touzhu.ifPresent(data -> {
+            merged.set("bettingVolume", JSONUtil.parseObj(data));
+            loadedKeys.add(resolveLoadedKey(redisProperties.getKeys().getTouzhu(), fixtureId));
+        });
+
+        attachCompanyChanges(
+                merged,
+                "europeanOdds",
+                redisProperties.getKeys().getOuzhiChanges(),
+                redisProperties.getOuzhiFilter().getCompanyIds(),
+                fixtureId,
+                loadedKeys);
+        attachCompanyChanges(
+                merged,
+                "asianHandicap",
+                redisProperties.getKeys().getYazhiChanges(),
+                redisProperties.getYazhiFilter().getCompanyIds(),
+                fixtureId,
+                loadedKeys);
 
         RedisMatchDataProfile profile = RedisMatchDataProfile.inspect(merged);
         JSONObject meta = JSONUtil.createObj();
         meta.set("loadedKeys", new JSONArray(loadedKeys));
-        meta.set("mergeStrategy", "detail+ouzhi+yazhi");
+        meta.set("mergeStrategy", "detail+shuju+ouzhi+ouzhiChanges+yazhi+yazhiChanges+touzhu");
         meta.putAll(profile.toMetaJson());
         merged.set("_meta", meta);
 
@@ -91,6 +115,72 @@ public class FootballMatchRedisService {
         return prefix + matchId + redisProperties.getKeySuffix();
     }
 
+    String buildOddsChangesKey(String prefix, String matchId, String companyId) {
+        return prefix + matchId + ":" + companyId;
+    }
+
+    private boolean hasAnyOddsChanges(String fixtureId) {
+        for (String companyId : redisProperties.getOuzhiFilter().getCompanyIds()) {
+            if (StrUtil.isNotBlank(readStringValue(
+                    buildOddsChangesKey(redisProperties.getKeys().getOuzhiChanges(), fixtureId, companyId)))) {
+                return true;
+            }
+        }
+        for (String companyId : redisProperties.getYazhiFilter().getCompanyIds()) {
+            if (StrUtil.isNotBlank(readStringValue(
+                    buildOddsChangesKey(redisProperties.getKeys().getYazhiChanges(), fixtureId, companyId)))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void attachCompanyChanges(JSONObject merged,
+                                      String oddsField,
+                                      String changesPrefix,
+                                      List<String> companyIds,
+                                      String matchId,
+                                      List<String> loadedKeys) {
+        JSONObject changesByCompany = new JSONObject();
+        for (String companyId : companyIds) {
+            String key = buildOddsChangesKey(changesPrefix, matchId, companyId);
+            String raw = readStringValue(key);
+            if (StrUtil.isBlank(raw)) {
+                continue;
+            }
+            JSONObject changes = JSONUtil.parseObj(normalizeChangesData(raw));
+            changesByCompany.set(companyId, changes);
+            loadedKeys.add(key);
+        }
+        if (changesByCompany.isEmpty()) {
+            return;
+        }
+
+        JSONObject oddsSection = merged.getJSONObject(oddsField);
+        if (oddsSection == null) {
+            oddsSection = JSONUtil.createObj();
+            merged.set(oddsField, oddsSection);
+        }
+        oddsSection.set("changesByCompany", changesByCompany);
+        mergeChangesIntoCompanies(oddsSection.getJSONArray("companies"), changesByCompany);
+    }
+
+    private void mergeChangesIntoCompanies(JSONArray companies, JSONObject changesByCompany) {
+        if (companies == null || companies.isEmpty()) {
+            return;
+        }
+        for (int i = 0; i < companies.size(); i++) {
+            JSONObject company = companies.getJSONObject(i);
+            if (company == null) {
+                continue;
+            }
+            JSONObject changes = changesByCompany.getJSONObject(company.getStr("companyId"));
+            if (changes != null && !changes.isEmpty()) {
+                company.set("changes", changes);
+            }
+        }
+    }
+
     private Optional<String> readSection(String prefix, String matchId) {
         String primaryKey = buildRedisKey(prefix, matchId);
         String data = readStringValue(primaryKey);
@@ -106,12 +196,30 @@ public class FootballMatchRedisService {
         return StrUtil.isBlank(data) ? Optional.empty() : Optional.of(normalizeRedisData(data, prefix));
     }
 
+    private String resolveLoadedKey(String prefix, String matchId) {
+        String primaryKey = buildRedisKey(prefix, matchId);
+        if (StrUtil.isNotBlank(readStringValue(primaryKey))) {
+            return primaryKey;
+        }
+        String legacyKey = prefix + matchId;
+        return legacyKey;
+    }
+
     private String readStringValue(String key) {
         String data = redisTemplate.opsForValue().get(key);
         if (StrUtil.isBlank(data)) {
             return null;
         }
         return data;
+    }
+
+    private String normalizeChangesData(String raw) {
+        try {
+            return RedisJacksonJsonCleaner.cleanJson(raw);
+        } catch (Exception e) {
+            log.warn("Redis 赔率变化数据清洗失败，使用原始字符串: {}", e.getMessage());
+            return raw.trim();
+        }
     }
 
     /**

@@ -80,9 +80,9 @@ public class FootballStateGraphConfig {
                         FootballIntentType.GENERAL_QA.name(), FootballGraphNodeNames.GENERAL_QA_AGENT
                 ));
 
-        graph.addEdge(FootballGraphNodeNames.DATA_AGENT, FootballGraphNodeNames.SIMULATION_AGENT);
-        graph.addEdge(FootballGraphNodeNames.SIMULATION_AGENT, FootballGraphNodeNames.TACTICAL_AGENT);
-        graph.addEdge(FootballGraphNodeNames.TACTICAL_AGENT, FootballGraphNodeNames.SYNTHESIS_AGENT);
+        graph.addEdge(FootballGraphNodeNames.DATA_AGENT, FootballGraphNodeNames.TACTICAL_AGENT);
+        graph.addEdge(FootballGraphNodeNames.TACTICAL_AGENT, FootballGraphNodeNames.SIMULATION_AGENT);
+        graph.addEdge(FootballGraphNodeNames.SIMULATION_AGENT, FootballGraphNodeNames.SYNTHESIS_AGENT);
         graph.addEdge(FootballGraphNodeNames.SYNTHESIS_AGENT, END);
         graph.addEdge(FootballGraphNodeNames.GENERAL_QA_AGENT, END);
 

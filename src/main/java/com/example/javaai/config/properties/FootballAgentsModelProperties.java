@@ -25,5 +25,8 @@ public class FootballAgentsModelProperties {
 
         /** 是否启用思考模式 */
         private Boolean enableThinking;
+
+        /** 是否启用多模态 API（qwen3.7-plus 等多模态模型须为 true） */
+        private Boolean multiModel;
     }
 }

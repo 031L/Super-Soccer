@@ -36,7 +36,66 @@ class RedisMatchDataProfileTest {
         assertTrue(profile.missingSections().contains("europeanOdds"));
         assertTrue(profile.missingSections().contains("asianHandicap"));
         assertTrue(profile.missingSections().contains("jczqOfficialOdds"));
+        assertTrue(profile.missingSections().contains("bettingVolume"));
         assertTrue(profile.toMetaJson().getStr("note").contains("不含欧赔"));
+    }
+
+    @Test
+    void inspect_shouldDetectShujuMatchData() {
+        JSONObject merged = JSONUtil.parseObj("""
+                {
+                  "matchData": {
+                    "header": {"homeTeam": "主队", "awayTeam": "客队"},
+                    "homeStandings": [{"played": 10}],
+                    "headToHeadSummary": "近6次交锋",
+                    "homeRecentRecords": [{"score": "2-1"}]
+                  }
+                }
+                """);
+
+        RedisMatchDataProfile profile = RedisMatchDataProfile.inspect(merged);
+
+        assertTrue(profile.availableSections().contains("matchHeader"));
+        assertTrue(profile.availableSections().contains("standings"));
+        assertTrue(profile.availableSections().contains("headToHead"));
+        assertTrue(profile.availableSections().contains("recentForm"));
+    }
+
+    @Test
+    void inspect_shouldDetectOddsChangesWhenPresent() {
+        JSONObject merged = JSONUtil.parseObj("""
+                {
+                  "europeanOdds": {
+                    "companies": [{"companyId": "293", "changes": {"timeline": [{"win": 2.1}]}}],
+                    "changesByCompany": {"293": {"timeline": [{"win": 2.1}]}}
+                  },
+                  "asianHandicap": {
+                    "changesByCompany": {"293": {"timeline": [{"handicap": "平手"}]}}
+                  }
+                }
+                """);
+
+        RedisMatchDataProfile profile = RedisMatchDataProfile.inspect(merged);
+
+        assertTrue(profile.hasEuropeanOddsChanges());
+        assertTrue(profile.hasAsianHandicapChanges());
+        assertTrue(profile.availableSections().contains("europeanOddsChanges"));
+        assertTrue(profile.availableSections().contains("asianHandicapChanges"));
+        assertFalse(profile.missingSections().contains("europeanOddsChanges"));
+    }
+
+    @Test
+    void inspect_shouldDetectBettingVolumeWhenPresent() {
+        JSONObject merged = JSONUtil.parseObj("""
+                {"bettingVolume":{"totalVolume":120000,"homePercent":45}}
+                """);
+
+        RedisMatchDataProfile profile = RedisMatchDataProfile.inspect(merged);
+
+        assertTrue(profile.hasBettingVolume());
+        assertTrue(profile.availableSections().contains("bettingVolume"));
+        assertFalse(profile.missingSections().contains("bettingVolume"));
+        assertTrue(profile.toMetaJson().getStr("note").contains("bettingVolume"));
     }
 
     @Test

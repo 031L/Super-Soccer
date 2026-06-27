@@ -6,7 +6,7 @@ import com.example.javaai.prompt.DocumentPromptService;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 /**
- * 推演 Agent：基于数据 Agent 产出进行赛果推演与情景分析。
+ * 推演 Agent：基于数据 Agent 与战术 Agent 产出进行赛果推演与情景分析。
  */
 public class FootballSimulationAgent extends ChatOnlyAgent {
 

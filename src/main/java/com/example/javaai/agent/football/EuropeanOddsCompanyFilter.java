@@ -84,6 +84,7 @@ public final class EuropeanOddsCompanyFilter {
         copyIfPresent(company, slim, "initialProbability");
         copyIfPresent(company, slim, "instantReturnRate");
         copyIfPresent(company, slim, "initialReturnRate");
+        copyIfPresent(company, slim, "changes");
         return slim;
     }
 

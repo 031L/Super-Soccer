@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
@@ -16,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class FootballMatchRedisServiceTest {
 
     @Mock
@@ -40,6 +43,73 @@ class FootballMatchRedisServiceTest {
     }
 
     @Test
+    void buildOddsChangesKey_shouldFormatCompanyChangesKey() {
+        assertEquals("jczqOuzhi::changes:1359200:293",
+                service.buildOddsChangesKey("jczqOuzhi::changes:", "1359200", "293"));
+    }
+
+    @Test
+    void findMatchDataById_shouldMergeShujuMatchData() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("jczqDetail::1359200:false")).thenReturn(null);
+        when(valueOperations.get("jczqDetail::1359200")).thenReturn(null);
+        when(valueOperations.get("jczqShuju::1359200:false")).thenReturn(null);
+        when(valueOperations.get("jczqShuju::1359200")).thenReturn("""
+                {
+                  "header": {"homeTeam": "主队", "awayTeam": "客队"},
+                  "homeStandings": [{"played": 10}],
+                  "headToHeadSummary": "近6次交锋",
+                  "homeRecentRecords": [{"score": "2-1"}]
+                }
+                """);
+        when(valueOperations.get("jczqOuzhi::1359200:false")).thenReturn(null);
+        when(valueOperations.get("jczqOuzhi::1359200")).thenReturn(null);
+        when(valueOperations.get("jczqYazhi::1359200:false")).thenReturn(null);
+        when(valueOperations.get("jczqYazhi::1359200")).thenReturn(null);
+        when(valueOperations.get("jczqTouzhu::1359200:false")).thenReturn(null);
+        when(valueOperations.get("jczqTouzhu::1359200")).thenReturn(null);
+
+        Optional<String> merged = service.findMatchDataById("1359200");
+
+        assertTrue(merged.isPresent());
+        String json = merged.get();
+        assertTrue(json.contains("\"matchData\""));
+        assertTrue(json.contains("主队"));
+        assertTrue(json.contains("\"standings\""));
+        assertTrue(json.contains("jczqShuju::1359200"));
+    }
+
+    @Test
+    void findMatchDataById_shouldMergeOuzhiAndYazhiChanges() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("jczqDetail::1359200:false")).thenReturn(null);
+        when(valueOperations.get("jczqDetail::1359200")).thenReturn(null);
+        when(valueOperations.get("jczqShuju::1359200:false")).thenReturn(null);
+        when(valueOperations.get("jczqShuju::1359200")).thenReturn(null);
+        when(valueOperations.get("jczqOuzhi::1359200:false"))
+                .thenReturn("{\"companies\":[{\"companyId\":\"293\",\"companyName\":\"威廉\"}]}");
+        when(valueOperations.get("jczqYazhi::1359200:false"))
+                .thenReturn("{\"companies\":[{\"companyId\":\"293\",\"companyName\":\"威廉\"}]}");
+        when(valueOperations.get("jczqTouzhu::1359200:false")).thenReturn(null);
+        when(valueOperations.get("jczqTouzhu::1359200")).thenReturn(null);
+        when(valueOperations.get("jczqOuzhi::changes:1359200:293"))
+                .thenReturn("{\"timeline\":[{\"time\":\"10:00\",\"win\":2.10}]}");
+        when(valueOperations.get("jczqYazhi::changes:1359200:293"))
+                .thenReturn("{\"timeline\":[{\"time\":\"10:00\",\"handicap\":\"平手\"}]}");
+
+        Optional<String> merged = service.findMatchDataById("1359200");
+
+        assertTrue(merged.isPresent());
+        String json = merged.get();
+        assertTrue(json.contains("\"changesByCompany\""));
+        assertTrue(json.contains("jczqOuzhi::changes:1359200:293"));
+        assertTrue(json.contains("jczqYazhi::changes:1359200:293"));
+        assertTrue(json.contains("\"hasEuropeanOddsChanges\": true"));
+        assertTrue(json.contains("\"hasAsianHandicapChanges\": true"));
+        assertTrue(json.contains("\"changes\""));
+    }
+
+    @Test
     void findMatchDataById_shouldFilterOuzhiCompanies() {
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         String ouzhiRaw = "{\"companies\":[\"java.util.ArrayList\",["
@@ -52,9 +122,13 @@ class FootballMatchRedisServiceTest {
                 + "]]}";
         when(valueOperations.get("jczqDetail::1364015:false")).thenReturn(null);
         when(valueOperations.get("jczqDetail::1364015")).thenReturn(null);
+        when(valueOperations.get("jczqShuju::1364015:false")).thenReturn(null);
+        when(valueOperations.get("jczqShuju::1364015")).thenReturn(null);
         when(valueOperations.get("jczqOuzhi::1364015:false")).thenReturn(ouzhiRaw);
         when(valueOperations.get("jczqYazhi::1364015:false")).thenReturn(null);
         when(valueOperations.get("jczqYazhi::1364015")).thenReturn(null);
+        when(valueOperations.get("jczqTouzhu::1364015:false")).thenReturn(null);
+        when(valueOperations.get("jczqTouzhu::1364015")).thenReturn(null);
 
         Optional<String> merged = service.findMatchDataById("1364015");
 
@@ -81,9 +155,13 @@ class FootballMatchRedisServiceTest {
                 + "]]}";
         when(valueOperations.get("jczqDetail::1364015:false")).thenReturn(null);
         when(valueOperations.get("jczqDetail::1364015")).thenReturn(null);
+        when(valueOperations.get("jczqShuju::1364015:false")).thenReturn(null);
+        when(valueOperations.get("jczqShuju::1364015")).thenReturn(null);
         when(valueOperations.get("jczqOuzhi::1364015:false")).thenReturn(null);
         when(valueOperations.get("jczqOuzhi::1364015")).thenReturn(null);
         when(valueOperations.get("jczqYazhi::1364015:false")).thenReturn(yazhiRaw);
+        when(valueOperations.get("jczqTouzhu::1364015:false")).thenReturn(null);
+        when(valueOperations.get("jczqTouzhu::1364015")).thenReturn(null);
 
         Optional<String> merged = service.findMatchDataById("1364015");
 
@@ -97,7 +175,7 @@ class FootballMatchRedisServiceTest {
     }
 
     @Test
-    void findMatchDataById_shouldMergeDetailOuzhiAndYazhi() {
+    void findMatchDataById_shouldMergeDetailOuzhiYazhiAndTouzhu() {
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.get("jczqDetail::1366392:false"))
                 .thenReturn("{\"fixtureId\":\"1366392\",\"header\":{\"homeTeam\":\"A\"}}");
@@ -105,6 +183,8 @@ class FootballMatchRedisServiceTest {
                 .thenReturn("{\"companies\":[{\"companyName\":\"威廉\"}]}");
         when(valueOperations.get("jczqYazhi::1366392:false"))
                 .thenReturn("{\"companies\":[{\"instantHandicap\":\"平手\"}]}");
+        when(valueOperations.get("jczqTouzhu::1366392:false"))
+                .thenReturn("{\"totalVolume\":120000,\"homePercent\":45}");
 
         Optional<String> merged = service.findMatchDataById("1366392");
 
@@ -114,6 +194,55 @@ class FootballMatchRedisServiceTest {
         assertTrue(json.contains("\"detail\""));
         assertTrue(json.contains("\"europeanOdds\""));
         assertTrue(json.contains("\"asianHandicap\""));
+        assertTrue(json.contains("\"bettingVolume\""));
+        assertTrue(json.contains("\"hasBettingVolume\": true"));
+        assertTrue(json.contains("jczqDetail::1366392:false"));
+        assertTrue(json.contains("jczqOuzhi::1366392:false"));
+        assertTrue(json.contains("jczqYazhi::1366392:false"));
+        assertTrue(json.contains("jczqTouzhu::1366392:false"));
+    }
+
+    @Test
+    void findMatchDataById_shouldFallbackToLegacyTouzhuKey() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("jczqDetail::1359200:false")).thenReturn(null);
+        when(valueOperations.get("jczqDetail::1359200")).thenReturn(null);
+        when(valueOperations.get("jczqOuzhi::1359200:false")).thenReturn(null);
+        when(valueOperations.get("jczqOuzhi::1359200")).thenReturn(null);
+        when(valueOperations.get("jczqYazhi::1359200:false")).thenReturn(null);
+        when(valueOperations.get("jczqYazhi::1359200")).thenReturn(null);
+        when(valueOperations.get("jczqTouzhu::1359200:false")).thenReturn(null);
+        when(valueOperations.get("jczqTouzhu::1359200"))
+                .thenReturn("{\"totalVolume\":88000,\"drawPercent\":20}");
+
+        Optional<String> merged = service.findMatchDataById("1359200");
+
+        assertTrue(merged.isPresent());
+        assertTrue(merged.get().contains("\"bettingVolume\""));
+        assertTrue(merged.get().contains("jczqTouzhu::1359200"));
+    }
+
+    @Test
+    void findMatchDataById_shouldMergeDetailOuzhiAndYazhi() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("jczqDetail::1366392:false"))
+                .thenReturn("{\"fixtureId\":\"1366392\",\"header\":{\"homeTeam\":\"A\"}}");
+        when(valueOperations.get("jczqOuzhi::1366392:false"))
+                .thenReturn("{\"companies\":[{\"companyName\":\"威廉\"}]}");
+        when(valueOperations.get("jczqYazhi::1366392:false"))
+                .thenReturn("{\"companies\":[{\"instantHandicap\":\"平手\"}]}");
+        when(valueOperations.get("jczqTouzhu::1366392:false")).thenReturn(null);
+        when(valueOperations.get("jczqTouzhu::1366392")).thenReturn(null);
+
+        Optional<String> merged = service.findMatchDataById("1366392");
+
+        assertTrue(merged.isPresent());
+        String json = merged.get();
+        assertTrue(json.contains("1366392"));
+        assertTrue(json.contains("\"detail\""));
+        assertTrue(json.contains("\"europeanOdds\""));
+        assertTrue(json.contains("\"asianHandicap\""));
+        assertFalse(json.contains("\"hasBettingVolume\": true"));
         assertTrue(json.contains("jczqDetail::1366392:false"));
         assertTrue(json.contains("jczqOuzhi::1366392:false"));
         assertTrue(json.contains("jczqYazhi::1366392:false"));
@@ -129,6 +258,8 @@ class FootballMatchRedisServiceTest {
         when(valueOperations.get("jczqOuzhi::1366392")).thenReturn(null);
         when(valueOperations.get("jczqYazhi::1366392:false")).thenReturn(null);
         when(valueOperations.get("jczqYazhi::1366392")).thenReturn(null);
+        when(valueOperations.get("jczqTouzhu::1366392:false")).thenReturn(null);
+        when(valueOperations.get("jczqTouzhu::1366392")).thenReturn(null);
 
         Optional<String> merged = service.findMatchDataById("1366392");
 
@@ -148,6 +279,8 @@ class FootballMatchRedisServiceTest {
         when(valueOperations.get("jczqOuzhi::1364015")).thenReturn(null);
         when(valueOperations.get("jczqYazhi::1364015:false")).thenReturn(null);
         when(valueOperations.get("jczqYazhi::1364015")).thenReturn(null);
+        when(valueOperations.get("jczqTouzhu::1364015:false")).thenReturn(null);
+        when(valueOperations.get("jczqTouzhu::1364015")).thenReturn(null);
 
         Optional<String> merged = service.findMatchDataById("1364015");
 

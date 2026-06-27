@@ -1,13 +1,20 @@
 package com.example.javaai.agent.football.graph;
 
 import com.alibaba.cloud.ai.graph.OverAllState;
+import com.example.javaai.rag.KnowledgeRetrievalService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+
+import java.util.Optional;
 
 /**
  * 为各 Agent 节点构建任务 prompt。
  */
 @Component
+@RequiredArgsConstructor
 public class FootballAgentTaskBuilder {
+
+    private final KnowledgeRetrievalService knowledgeRetrievalService;
 
     public String buildDataTask(OverAllState state) {
         if (FootballGraphStateHelper.hasRedisMatchData(state)) {
@@ -19,7 +26,7 @@ public class FootballAgentTaskBuilder {
         return buildWebSearchDataAgentTask(state);
     }
 
-    public String buildSimulationTask(OverAllState state) {
+    public String buildTacticalTask(OverAllState state) {
         return """
                 【用户原始问题】
                 %s
@@ -31,7 +38,7 @@ public class FootballAgentTaskBuilder {
                 nullToPlaceholder(FootballGraphStateHelper.stringValue(state, FootballGraphKeys.DATA_ANALYSIS)));
     }
 
-    public String buildTacticalTask(OverAllState state) {
+    public String buildSimulationTask(OverAllState state) {
         return """
                 【用户原始问题】
                 %s
@@ -39,12 +46,12 @@ public class FootballAgentTaskBuilder {
                 【数据 Agent 产出】
                 %s
 
-                【推演 Agent 产出】
+                【战术 Agent 产出】
                 %s
                 """.formatted(
                 FootballGraphStateHelper.stringValue(state, FootballGraphKeys.USER_QUERY),
                 nullToPlaceholder(FootballGraphStateHelper.stringValue(state, FootballGraphKeys.DATA_ANALYSIS)),
-                nullToPlaceholder(FootballGraphStateHelper.stringValue(state, FootballGraphKeys.SIMULATION_ANALYSIS)));
+                nullToPlaceholder(FootballGraphStateHelper.stringValue(state, FootballGraphKeys.TACTICAL_ANALYSIS)));
     }
 
     public String buildSynthesisTask(OverAllState state) {
@@ -55,20 +62,35 @@ public class FootballAgentTaskBuilder {
                 【数据 Agent 产出】
                 %s
 
-                【推演 Agent 产出】
+                【战术 Agent 产出】
                 %s
 
-                【战术 Agent 产出】
+                【推演 Agent 产出】
                 %s
                 """.formatted(
                 FootballGraphStateHelper.stringValue(state, FootballGraphKeys.USER_QUERY),
                 nullToPlaceholder(FootballGraphStateHelper.stringValue(state, FootballGraphKeys.DATA_ANALYSIS)),
-                nullToPlaceholder(FootballGraphStateHelper.stringValue(state, FootballGraphKeys.SIMULATION_ANALYSIS)),
-                nullToPlaceholder(FootballGraphStateHelper.stringValue(state, FootballGraphKeys.TACTICAL_ANALYSIS)));
+                nullToPlaceholder(FootballGraphStateHelper.stringValue(state, FootballGraphKeys.TACTICAL_ANALYSIS)),
+                nullToPlaceholder(FootballGraphStateHelper.stringValue(state, FootballGraphKeys.SIMULATION_ANALYSIS)));
     }
 
     public String buildGeneralQaTask(OverAllState state) {
-        return FootballGraphStateHelper.stringValue(state, FootballGraphKeys.USER_QUERY);
+        String userQuery = FootballGraphStateHelper.stringValue(state, FootballGraphKeys.USER_QUERY);
+        return buildGeneralQaTask(userQuery, knowledgeRetrievalService.retrieveContext(userQuery));
+    }
+
+    public String buildGeneralQaTask(String userQuery, Optional<String> knowledgeContext) {
+        StringBuilder task = new StringBuilder();
+        knowledgeContext.ifPresent(context -> {
+            task.append("""
+                    【知识库参考】
+                    以下是与问题相关的内部知识，请优先参考；不足时再使用搜索工具补充。
+
+                    """);
+            task.append(context).append("\n\n");
+        });
+        task.append("【用户问题】\n").append(userQuery);
+        return task.toString();
     }
 
     private String buildRedisDataAgentTask(OverAllState state) {
@@ -80,9 +102,13 @@ public class FootballAgentTaskBuilder {
 
                 【Redis 数据结构说明】
                 - 以下 JSON 已由系统在读取 Redis 时完成清洗（已去除 @class、BigDecimal/ArrayList 包装，中文已还原）
-                - detail：比赛详情（header、matchData、积分榜、交锋/战绩等）；**多数场次仅含此类数据，不含任何赔率**
+                - detail：比赛详情（header 等，旧版 jczqDetail）
+                - matchData：比赛数据（积分榜、交锋、近期战绩，来自 jczqShuju）
                 - europeanOdds：来自 jczqOuzhi，含 companyId=1 的「竞彩官」即竞彩官方欧赔（`_meta.hasJczqOfficialOdds=true` 时勿再搜竞彩赔率）
+                - europeanOdds.changesByCompany / companies[].changes：来自 jczqOuzhi::changes:{matchId}:{companyId} 的欧盘变化过程
                 - asianHandicap：来自 jczqYazhi，已过滤主流公司（见 `_companyFilter`）
+                - asianHandicap.changesByCompany / companies[].changes：来自 jczqYazhi::changes:{matchId}:{companyId} 的亚盘变化过程
+                - bettingVolume：来自 jczqTouzhu，必发交易量（`_meta.hasBettingVolume=true` 时勿再搜索必发交易量）
                 - 请查看 `_meta.availableSections` 与 `_meta.missingSections`；**仅 missingSections 中的项才需要搜索**
 
                 【Redis 清洗后数据】
@@ -94,6 +120,8 @@ public class FootballAgentTaskBuilder {
                 【重要】
                 - **必须先**用 Redis 已有数据写出报告主体（对阵、积分榜、交锋、欧赔、亚盘等），再对 `_meta.missingSections` 中的项搜索补充。
                 - `hasJczqOfficialOdds=true` 时，竞彩官方数据在 `europeanOdds.companies`（companyId=1），**禁止**再搜索「竞彩官方 SP」。
+                - `hasBettingVolume=true` 时，必发交易量已在 `bettingVolume`，**禁止**再搜索必发交易量。
+                - `hasEuropeanOddsChanges=true` / `hasAsianHandicapChanges=true` 时，赔率变化已在 Redis，**禁止**再搜索赔率变化过程。
                 - `homeRecentRecords`/`awayRecentRecords` 为空数组时，近5场战绩可搜索补充；欧赔亚盘非空时不得声称 Redis 无赔率。
                 - 不要根据字段名臆造数据；搜索补充须标注「来源：搜索补充」。
                 - 必须输出完整结构化报告，不要只列「下一步将搜索」就结束。

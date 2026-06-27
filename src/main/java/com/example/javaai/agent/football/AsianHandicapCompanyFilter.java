@@ -77,6 +77,7 @@ public final class AsianHandicapCompanyFilter {
         copyIfPresent(company, slim, "initialHandicap");
         copyIfPresent(company, slim, "initialAwayWater");
         copyIfPresent(company, slim, "initialChangeTime");
+        copyIfPresent(company, slim, "changes");
         return slim;
     }
 

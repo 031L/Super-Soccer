@@ -22,7 +22,7 @@ public class TacticalAgentNode implements NodeAction {
 
     @Override
     public Map<String, Object> apply(OverAllState state) throws Exception {
-        FootballGraphProgress.emit("\n\n---------- 阶段 3/4：战术 Agent ----------\n");
+        FootballGraphProgress.emit("\n\n---------- 阶段 2/4：战术 Agent ----------\n");
         var tacticalAgent = agentFactory.createTacticalAgent();
         String output = nodeExecutor.runStage(
                 null, tacticalAgent, taskBuilder.buildTacticalTask(state), "战术 Agent");

@@ -6,7 +6,7 @@ import com.example.javaai.prompt.DocumentPromptService;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 /**
- * 综合 Agent：整合数据、推演、战术三方结论，输出最终报告。
+ * 综合 Agent：整合数据、战术、推演三方结论，输出最终报告。
  */
 public class FootballSynthesisAgent extends ChatOnlyAgent {
 

@@ -19,9 +19,18 @@ public class VectorStoreProperties {
     /** 启动时自动将知识库 Markdown 入库 */
     private boolean ingestOnStartup = false;
 
+    /** 入库前是否先删除 source=knowledge 的旧数据（幂等 ingest） */
+    private boolean ingestReplaceExisting = true;
+
     /** 默认检索返回条数 */
     private int searchTopK = 5;
 
     /** 默认相似度阈值，0 表示不过滤 */
     private double searchSimilarityThreshold = 0.0;
+
+    /** 通用 Agent 是否启用知识库检索 */
+    private boolean generalAgentRagEnabled = true;
+
+    /** 向量库无命中时，是否回退直读 knowledge Markdown 全文 */
+    private boolean generalAgentDirectReadFallback = true;
 }

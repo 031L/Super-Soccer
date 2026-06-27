@@ -15,6 +15,9 @@ public record RedisMatchDataProfile(
         boolean hasEuropeanOdds,
         boolean hasAsianHandicap,
         boolean hasJczqOfficialOdds,
+        boolean hasBettingVolume,
+        boolean hasEuropeanOddsChanges,
+        boolean hasAsianHandicapChanges,
         List<String> missingSections) {
 
     public boolean hasAnyOdds() {
@@ -27,23 +30,38 @@ public record RedisMatchDataProfile(
         json.set("hasEuropeanOdds", hasEuropeanOdds);
         json.set("hasAsianHandicap", hasAsianHandicap);
         json.set("hasJczqOfficialOdds", hasJczqOfficialOdds);
+        json.set("hasBettingVolume", hasBettingVolume);
+        json.set("hasEuropeanOddsChanges", hasEuropeanOddsChanges);
+        json.set("hasAsianHandicapChanges", hasAsianHandicapChanges);
         json.set("missingSections", new JSONArray(missingSections));
         json.set("note", buildNote());
         return json;
     }
 
     private String buildNote() {
+        StringBuilder note = new StringBuilder();
         if (hasEuropeanOdds && hasJczqOfficialOdds) {
-            return "Redis 已含欧赔/亚盘；竞彩官方欧赔见 europeanOdds.companies 中 companyId=1（竞彩官）。"
-                    + " 独立 Key 的 europeanOdds/asianHandicap 优先于 detail 内同名块。"
-                    + " 仅伤停、近期战绩、天气等 _meta.missingSections 未列出的空字段需搜索补充。";
+            note.append("Redis 已含欧赔/亚盘；竞彩官方欧赔见 europeanOdds.companies 中 companyId=1（竞彩官）。");
+        } else if (hasAnyOdds()) {
+            note.append("Redis 含欧赔/亚盘；若 missingSections 含 jczqOfficialOdds 表示欧盘无 companyId=1，可搜索补充。");
+        } else {
+            note.append("当前 Redis 数据不含欧赔、亚盘，仅含比赛基础/战绩/交锋等。");
+            note.append(" 报告中的「赔率变化」章节必须通过搜索/爬取补充，并标注来源。");
         }
-        if (hasAnyOdds()) {
-            return "Redis 含欧赔/亚盘；若 missingSections 含 jczqOfficialOdds 表示欧盘无 companyId=1，可搜索补充。"
-                    + " 独立 Key 的 europeanOdds/asianHandicap 优先于 detail 内同名块。";
+        if (hasBettingVolume) {
+            note.append(" 必发交易量见 bettingVolume（来自 jczqTouzhu），勿再搜索补充。");
+        } else if (!missingSections.isEmpty() && missingSections.contains("bettingVolume")) {
+            note.append(" 必发交易量缺失，可通过搜索补充。");
         }
-        return "当前 Redis 数据不含欧赔、亚盘，仅含比赛基础/战绩/交锋等。"
-                + " 报告中的「赔率变化」章节必须通过搜索/爬取补充，并标注来源。";
+        if (hasEuropeanOddsChanges) {
+            note.append(" 欧盘变化见 europeanOdds.changesByCompany 或 companies[].changes（来自 jczqOuzhi::changes）。");
+        }
+        if (hasAsianHandicapChanges) {
+            note.append(" 亚盘变化见 asianHandicap.changesByCompany 或 companies[].changes（来自 jczqYazhi::changes）。");
+        }
+        note.append(" 独立 Key 的 matchData/europeanOdds/asianHandicap/bettingVolume 优先于 detail 内同名块。");
+        note.append(" 仅伤停、近期战绩、天气等 _meta.missingSections 未列出的空字段需搜索补充。");
+        return note.toString();
     }
 
     static RedisMatchDataProfile inspect(JSONObject merged) {
@@ -51,6 +69,9 @@ public record RedisMatchDataProfile(
         boolean european = hasEuropeanOdds(merged);
         boolean asian = hasAsianHandicap(merged);
         boolean jczq = hasJczqOfficialOdds(merged);
+        boolean bettingVolume = hasBettingVolume(merged);
+        boolean europeanChanges = hasOddsChanges(merged.getJSONObject("europeanOdds"));
+        boolean asianChanges = hasOddsChanges(merged.getJSONObject("asianHandicap"));
 
         if (hasMatchHeader(merged)) {
             available.add("matchHeader");
@@ -73,6 +94,15 @@ public record RedisMatchDataProfile(
         if (jczq) {
             available.add("jczqOfficialOdds");
         }
+        if (bettingVolume) {
+            available.add("bettingVolume");
+        }
+        if (europeanChanges) {
+            available.add("europeanOddsChanges");
+        }
+        if (asianChanges) {
+            available.add("asianHandicapChanges");
+        }
 
         List<String> missing = new ArrayList<>();
         if (!european) {
@@ -84,8 +114,67 @@ public record RedisMatchDataProfile(
         if (!jczq) {
             missing.add("jczqOfficialOdds");
         }
+        if (!bettingVolume) {
+            missing.add("bettingVolume");
+        }
+        if (european && !europeanChanges) {
+            missing.add("europeanOddsChanges");
+        }
+        if (asian && !asianChanges) {
+            missing.add("asianHandicapChanges");
+        }
 
-        return new RedisMatchDataProfile(available, european, asian, jczq, missing);
+        return new RedisMatchDataProfile(
+                available, european, asian, jczq, bettingVolume, europeanChanges, asianChanges, missing);
+    }
+
+    private static boolean hasOddsChanges(JSONObject oddsSection) {
+        if (oddsSection == null) {
+            return false;
+        }
+        if (hasNonEmptySection(oddsSection.getJSONObject("changesByCompany"))) {
+            return true;
+        }
+        JSONArray companies = oddsSection.getJSONArray("companies");
+        if (companies == null) {
+            return false;
+        }
+        for (int i = 0; i < companies.size(); i++) {
+            JSONObject company = companies.getJSONObject(i);
+            if (company != null && hasNonEmptySection(company.getJSONObject("changes"))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasBettingVolume(JSONObject merged) {
+        return hasNonEmptySection(merged.getJSONObject("bettingVolume"))
+                || hasNonEmptySection(detailPart(merged, "bettingVolume"));
+    }
+
+    private static boolean hasNonEmptySection(JSONObject section) {
+        if (section == null || section.isEmpty()) {
+            return false;
+        }
+        for (String key : section.keySet()) {
+            Object value = section.get(key);
+            if (value == null || value instanceof cn.hutool.json.JSONNull) {
+                continue;
+            }
+            if (value instanceof JSONArray array) {
+                if (!array.isEmpty()) {
+                    return true;
+                }
+            } else if (value instanceof JSONObject object) {
+                if (!object.isEmpty()) {
+                    return true;
+                }
+            } else if (StrUtil.isNotBlank(String.valueOf(value))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean hasEuropeanOdds(JSONObject merged) {
@@ -146,6 +235,7 @@ public record RedisMatchDataProfile(
         JSONObject header = firstNonNull(
                 merged.getJSONObject("header"),
                 detailPart(merged, "header"),
+                merged.getJSONObject("matchData") != null ? merged.getJSONObject("matchData").getJSONObject("header") : null,
                 nestedHeader(merged.getJSONObject("matchData")),
                 nestedHeader(detailPart(merged, "matchData")));
         return header != null && StrUtil.isNotBlank(header.getStr("homeTeam"));

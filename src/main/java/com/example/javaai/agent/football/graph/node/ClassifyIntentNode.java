@@ -29,7 +29,7 @@ public class ClassifyIntentNode implements NodeAction {
 
         FootballGraphProgress.emit("【编排器】意图识别结果：" + intent.name());
         if (intent == FootballIntentType.MATCH_ANALYSIS) {
-            FootballGraphProgress.emit("【编排器】进入比赛分析流水线：数据 → 推演 → 战术 → 综合");
+            FootballGraphProgress.emit("【编排器】进入比赛分析流水线：数据 → 战术 → 推演 → 综合");
         } else {
             FootballGraphProgress.emit("【编排器】进入通用问答 Agent");
         }

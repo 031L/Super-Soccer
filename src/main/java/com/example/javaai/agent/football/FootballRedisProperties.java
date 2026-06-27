@@ -51,7 +51,15 @@ public class FootballRedisProperties {
     public static class Keys {
 
         private String detail = "jczqDetail::";
+        /** 比赛数据（积分榜、交锋、近期战绩），例如 jczqShuju::1359200 */
+        private String shuju = "jczqShuju::";
         private String ouzhi = "jczqOuzhi::";
+        /** 某公司欧盘变化过程，例如 jczqOuzhi::changes:1359200:293 */
+        private String ouzhiChanges = "jczqOuzhi::changes:";
         private String yazhi = "jczqYazhi::";
+        /** 某公司亚盘变化过程，例如 jczqYazhi::changes:1359200:293 */
+        private String yazhiChanges = "jczqYazhi::changes:";
+        /** 必发交易量，例如 jczqTouzhu::1359200 */
+        private String touzhu = "jczqTouzhu::";
     }
 }
