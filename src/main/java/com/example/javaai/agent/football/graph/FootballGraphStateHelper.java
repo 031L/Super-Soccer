@@ -21,12 +21,21 @@ public final class FootballGraphStateHelper {
     }
 
     public static Map<String, Object> toInitialState(FootballAgentContext context, String streamSessionId) {
+        return toInitialState(context, streamSessionId, null);
+    }
+
+    public static Map<String, Object> toInitialState(FootballAgentContext context,
+                                                     String streamSessionId,
+                                                     String requestId) {
         Map<String, Object> state = new HashMap<>();
         state.put(FootballGraphKeys.USER_QUERY, context.getUserQuery());
         state.put(FootballGraphKeys.MATCH_ID, nullToEmpty(context.getMatchId()));
         state.put(FootballGraphKeys.REDIS_RAW_DATA, nullToEmpty(context.getRedisRawData()));
         if (StrUtil.isNotBlank(streamSessionId)) {
             state.put(FootballGraphKeys.STREAM_SESSION_ID, streamSessionId);
+        }
+        if (StrUtil.isNotBlank(requestId)) {
+            state.put(FootballGraphKeys.REQUEST_ID, requestId);
         }
         return state;
     }

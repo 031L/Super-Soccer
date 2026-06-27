@@ -1,5 +1,6 @@
 package com.example.javaai.agent.football;
 
+import com.example.javaai.stream.AnalysisStreamConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -26,8 +27,8 @@ public class GeneralQaOrchestrator {
 
     public SseEmitter runStream(String userQuery) {
         log.info("通用问答流式开始: {}", userQuery);
-        SseEmitter emitter = new SseEmitter(FootballSseConstants.TIMEOUT_MS);
-        emitter.onTimeout(() -> log.warn("通用问答 SSE 超时（{} ms）", FootballSseConstants.TIMEOUT_MS));
+        SseEmitter emitter = new SseEmitter(AnalysisStreamConstants.TIMEOUT_MS);
+        emitter.onTimeout(() -> log.warn("通用问答 SSE 超时（{} ms）", AnalysisStreamConstants.TIMEOUT_MS));
         CompletableFuture.runAsync(() -> runStreamInternal(userQuery, emitter));
         return emitter;
     }

@@ -342,7 +342,9 @@ curl http://localhost:8123/api/health
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET / POST | `/api/ai/football/multi_agent/stream` | 足球多 Agent SSE 流式输出 |
+| STOMP + SockJS | `/api/ws/football` | 足球多 Agent 流式输出（**推荐**，JSON 事件 + 取消） |
+| GET / POST | `/api/ai/football/multi_agent/stream` | 足球多 Agent SSE 流式输出（兼容保留） |
+| GET / POST | `/api/ai/graph/stream` | StateGraph 结构化 SSE |
 | GET | `/api/ai/football/multi_agent` | 足球多 Agent 同步返回最终报告 |
 | GET | `/api/ai/manus/chat` | YuManus 超级智能体 SSE 流式 |
 | GET | `/api/health` | 健康检查 |
@@ -357,11 +359,21 @@ curl http://localhost:8123/api/health
 
 ### 调用示例
 
-**流式分析（带比赛 ID）：**
+**流式分析（SSE，带比赛 ID）：**
 
 ```bash
 curl -N "http://localhost:8123/api/ai/football/multi_agent/stream?matchId=1366392&message=分析这场比赛"
 ```
+
+**流式分析（STOMP + SockJS，推荐）：**
+
+连接 `http://localhost:8123/api/ws/football`，订阅 `/user/queue/football/analysis/{requestId}`，发送：
+
+- `SEND /app/football/analyze` — body: `{"requestId":"uuid","matchId":"1366392","message":"分析这场比赛"}`
+- `SEND /app/football/cancel` — body: `{"requestId":"uuid","reason":"user_stop"}`
+- `SEND /app/football/ping` — body: `{"requestId":"uuid"}`
+
+详见 [docs/STOMP-SockJS流式设计.md](docs/STOMP-SockJS流式设计.md)。
 
 **同步获取最终报告：**
 

@@ -15,6 +15,8 @@ public final class FootballGraphKeys {
     public static final String FINAL_REPORT = "finalReport";
     /** SSE 流式会话 ID，用于跨异步图节点传播 progress sink */
     public static final String STREAM_SESSION_ID = "streamSessionId";
+    /** STOMP 分析任务 requestId，用于取消检查 */
+    public static final String REQUEST_ID = "requestId";
 
     private FootballGraphKeys() {
     }
